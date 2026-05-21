@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Sentence & Longest Word Analyzer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f4f4;
+      color: #222;
+    }
+
+    h2, h3 {
+      color: #333;
+    }
+
+    #controls {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 700px;
+    }
+
+    button {
+      padding: 8px 14px;
+      margin-top: 6px;
+      margin-right: 6px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+      font-size: 14px;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    input[type="number"] {
+      width: 80px;
+      padding: 4px;
+    }
+
+    input[type="file"] {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Book Sentence & Longest Word Analyzer</h2>
+
+  <div id="controls">
+    <input type="file" id="fileInput" accept=".txt" multiple>
+    <br>
+    <button id="analyzeBtn">Analyze & Download CSV</button>
+    <button id="clearBtn">Clear</button>
+
+    <br><br>
+
+    <h3>Random Sampling</h3>
+    <label>
+      Sample %:
+      <input type="number" id="samplePercent" min="1" max="100" value="10">
+    </label>
+    <button id="sampleBtn">Run Random Sample</button>
+
+    <br><br>
+
+    <h3>Trim Outliers</h3>
+    <label>
+      Trim top/bottom %:
+      <input type="number" id="trimPercent" min="1" max="40" value="5">
+    </label>
+    <button id="trimBtn">Trim & Recalculate</button>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const sampleBtn = document.getElementById('sampleBtn');
+    const trimBtn = document.getElementById('trimBtn');
+
+    let rows = [];
+
+    analyzeBtn.addEventListener('click', handleAnalyze);
+    sampleBtn.addEventListener('click', handleSample);
+    trimBtn.addEventListener('click', handleTrim);
+    clearBtn.addEventListener('click', clearAll);
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result || '');
+        reader.onerror = e => reject(e);
+        reader.readAsText(file);
+      });
+    }
+
+    function handleAnalyze() {
+      const files = fileInput.files;
+      if (!files.length) {
+        alert('Select .txt files first.');
+        return;
+      }
+
+      Promise.all([...files].map(readFileAsText)).then(texts => {
+        processText(texts.join('\n'));
+        createCSV(rows);
+      });
+    }
+
+    function handleSample() {
+      if (rows.length === 0) {
+        alert('Run full analysis first.');
+        return;
+      }
+
+      const pct = parseFloat(document.getElementById('samplePercent').value) / 100;
+
+      if (pct <= 0 || pct > 1) {
+        alert('Invalid percentage.');
+        return;
+      }
+
+      const shuffled = [...rows].sort(() => Math.random() - 0.5);
+      const sampleSize = Math.max(1, Math.floor(shuffled.length * pct));
+      const sample = shuffled.slice(0, sampleSize);
+
+      createCSV(sample, 'random_sample.csv');
+    }
+
+    function handleTrim() {
+      if (rows.length === 0) {
+        alert('Run full analysis first.');
+        return;
+      }
+
+      const pct = parseFloat(document.getElementById('trimPercent').value) / 100;
+
+      if (pct <= 0 || pct >= 0.5) {
+        alert('Percentage must be between 1 and 40.');
+        return;
+      }
+
+      const sorted = [...rows].sort((a, b) => a.len - b.len);
+      const cut = Math.floor(sorted.length * pct);
+      const trimmed = sorted.slice(cut, sorted.length - cut);
+
+      createCSV(trimmed, 'trimmed_dataset.csv');
+    }
+
+    function processText(text) {
+      rows = [];
+
+      const sentences = text.split(/(?<=[.!?])\s+/);
+
+      for (let s of sentences) {
+        s = s.trim();
+        if (!s) continue;
+
+        const cleaned = s.replace(/[^A-Za-z]+/g, ' ');
+        const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+
+        if (!words.length) continue;
+
+        let longest = '';
+
+        for (let w of words) {
+          if (w.length > longest.length) {
+            longest = w;
+          }
+        }
+
+        rows.push({
+          len: words.length,
+          longestLen: longest.length,
+          longestWord: longest
+        });
+      }
+    }
+
+    function createCSV(dataset, filename = 'sentence_longest_word_stats.csv') {
+      let csv = 'sentence_length,longest_word_length,longest_word\n';
+
+      dataset.forEach(r => {
+        csv += `${r.len},${r.longestLen},"${r.longestWord.replace(/"/g, '""')}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function clearAll() {
+      rows = [];
+      fileInput.value = '';
+      alert('Cleared successfully.');
+    }
+  </script>
+</body>
+</html>
